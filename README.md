@@ -1,3 +1,90 @@
+# 📌 DRAM Scheduling Algorithms using Ramulator
+This project implements and evaluates multiple DRAM scheduling algorithms using the Ramulator simulator:
+- FCFS
+- FRFCFS
+- FRFCFS with Priority
+- FRFCFS with Cap
+- ATLAS
+- BLISS
+
+## 🛠 Prerequisites
+- OS: Ubuntu 20.04 / 22.04 (recommended)
+- Compiler: g++ / clang
+- Build tools: make
+- Optional: Oracle VirtualBox (if running in a VM)
+**Install required packages:**
+```sh
+  sudo apt update
+  sudo apt install build-essential clang -y
+```
+
+## 📂 Project Structure
+```sh
+ramulator/
+├── configs/
+│   ├── DDR3-config.cfg
+│   └── DDR4-config.cfg
+├── src/
+│   ├── Scheduler.h
+│   ├── Controller.h
+│   └── Request.h
+├── dram.trace
+├── Makefile
+└── ramulator
+```
+
+## ⚙️ Build Instructions
+1. **Navigate to the Ramulator directory**
+```sh
+  cd ramulator
+```
+2. **Clean previous builds (optional but recommended)**
+```sh
+make clean
+```
+3. **Compile the project**
+```sh
+make -j3
+```
+
+## ▶️ Running the Simulator
+**Basic Run (DDR3)**
+```sh
+./ramulator configs/DDR3-config.cfg --mode=dram --stats my_output.txt dram.trace
+```
+**Run with DDR4 Configuration**
+```sh
+./ramulator configs/DDR4-config.cfg --mode=dram --stats my_output.txt dram.trace
+```
+- ---mode=dram → Runs Ramulator in DRAM-only simulation mode
+- --stats my_output.txt → Saves performance statistics to a file
+- dram.trace → Input memory trace file
+
+## 🔁 Selecting Scheduling Algorithms
+Scheduling algorithms are selected internally in Scheduler.h.
+To change the algorithm:
+1. Open src/Scheduler.h
+2. Locate the compare function/lambda list
+3. Set the desired scheduler (e.g., FCFS, FRFCFS, ATLAS, BLISS)
+4. Rebuild:
+```sh
+make clean
+make -j3
+```
+
+## 📊 Output
+**Simulation results are stored in:**
+```sh
+my_output.txt
+```
+**Metrics include:**
+- Row hits / misses / conflicts
+- Read latency
+- Active & busy cycles
+- Serving & incoming requests
+
+
+
 We have released an updated version of Ramulator, called [Ramulator 2.0](https://github.com/CMU-SAFARI/ramulator2), in August 2023. Ramulator 2.0 is easier to use, extend, and modify. It also has support for the latest DRAM standards at the time (e.g., DDR5, LPDDR5, HBM3 GDDR6). We suggest that you use Ramulator 2.0 and welcome your feedback and bug/issue reports.
 
 # Ramulator: A DRAM Simulator

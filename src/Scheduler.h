@@ -24,9 +24,19 @@ Current Memory Scheduling Policies:
 4) FRFCFS_PriorHit - First Ready First Come First Serve Prioritize Hits
        This scheduling policy behaves the same way as FRFCFS, except that it
        prioritizes row hits more than readiness. 
+       
+       
+5) ATLAS - Advanced Thread-Level Adaptive Scheduling
+       This scheduling policy is based on the ATLAS algorithm, which considers
+       request priorities based on process IDs, whether a request is marked, and
+       row hit status.
+       
+6) BLISS - Balancing Performance, Fairness and Complexity in Memory Access Scheduling
+       This scheduling policy is based on the BLISS algorithm, which considers
+       request priorities based on OldestStreak, row hit status and arrival time.
 
 You can select which scheduler you want to use by changing the value of 
-"type" variable on line number 74.
+"type" variable on line number 84.
 
                 _______________________________________
 
@@ -70,15 +80,86 @@ public:
     Controller<T>* ctrl;
 
     enum class Type {
-        FCFS, FRFCFS, FRFCFS_Cap, FRFCFS_PriorHit, MAX
-    } type = Type::FRFCFS_Cap; //Change this line to change scheduling policy
+        FCFS, FRFCFS, FRFCFS_Cap, FRFCFS_PriorHit, ATLAS, BLISS, MAX
+    } type = Type::ATLAS; //Change this line to change scheduling policy
 
     long cap = 16; //Change this line to change cap
+    
+    //GLobal Counter
+    int count = 0;
+    
+    //BLISS variables 
+    // PrevPID for previous Core ID, 
+    // oldestStreak for most times a coreID appears, 
+    // Mark for array of boolean representation
+    int PrevPID = 0;
+    int oldestStreak = 0;
+    bool B_mark[40];
+    
+    //ATLAS variables
+    // Mark the array of boolean representation
+    // CPU_cycles to keep track of current cpu 
+    // Threshold value based on arrival times
+    bool A_mark[40];
+    long CPU_cycles = this->ctrl->clk;
+    long CPU_threshold = 200;
 
     Scheduler(Controller<T>* ctrl) : ctrl(ctrl) {}
 
     list<Request>::iterator get_head(list<Request>& q)
     {
+        
+    	if(type == Type::BLISS){
+    	    if (!q.size())
+                return q.end();
+               
+            count = 0;
+            auto head = q.begin();
+            for(auto itr = next(q.begin(), 1); itr != q.end(); itr++){
+    		if(itr->coreid ==  PrevPID && oldestStreak < cap){
+    		   B_mark[count] = true;
+    		   oldestStreak += 1;
+    		}
+    		else if(itr->coreid ==  PrevPID && oldestStreak == cap){
+    		    B_mark[count] = true;
+    		    oldestStreak = 1;
+    		}
+    		else{
+    		    oldestStreak = 1;
+    		}
+    		PrevPID = itr->coreid;
+    		count++;
+            }
+            
+            count = 1;
+            for (auto itr = next(q.begin(), 1); itr != q.end(); itr++)
+                head = compare[int(type)](head, itr);
+                count++;
+
+            return head; 
+    	        
+    	}
+    	else
+    	if(type == Type::ATLAS){
+    	   if (!q.size())
+               return q.end();
+           
+           count = 0;
+           auto head = q.begin();
+            for(auto itr = next(q.begin(), 1); itr != q.end(); itr++){
+    		A_mark[count] = ( abs(CPU_cycles - itr->arrive) > CPU_threshold );
+    		count++;
+            }
+            
+            count = 1;
+            for (auto itr = next(q.begin(), 1); itr != q.end(); itr++)
+                head = compare[int(type)](head, itr);
+                count++;
+
+            return head; 
+    	        
+    	}
+    	else
         // TODO make the decision at compile time
         if (type != Type::FRFCFS_PriorHit) {
             //If queue is empty, return end of queue
@@ -156,6 +237,7 @@ public:
 
 //Compare functions for each memory schedulers
 private:
+    
     typedef list<Request>::iterator ReqIter;
     function<ReqIter(ReqIter, ReqIter)> compare[int(Type::MAX)] = {
         // FCFS
@@ -191,6 +273,7 @@ private:
 
             if (req1->arrive <= req2->arrive) return req1;
             return req2;},
+            
         // FRFCFS_PriorHit
         [this] (ReqIter req1, ReqIter req2) {
             bool ready1 = this->ctrl->is_ready(req1) && this->ctrl->is_row_hit(req1);
@@ -202,7 +285,48 @@ private:
             }
 
             if (req1->arrive <= req2->arrive) return req1;
-            return req2;}
+            return req2;},
+            
+        // ATLAS
+        [this] (ReqIter req1, ReqIter req2) {
+            bool marked1 = A_mark[count-1];
+            bool marked2 = A_mark[count];
+	    if (marked1 ^ marked2){
+		if (marked1) return req1;
+		else return req2;
+	    }
+
+	    bool hit1 = this->ctrl->is_row_hit(req1);
+	    bool hit2 = this->ctrl->is_row_hit(req2);
+	    if (hit1 ^ hit2){
+	        if (hit1) return req1;
+		else return req2;
+	    }
+	    
+	    if (req1->arrive <= req2->arrive) return req1;
+	    else return req2;
+	   
+            },
+            
+        // BLISS
+        [this] (ReqIter req1, ReqIter req2) {
+            bool marked1 = B_mark[count-1] != 1;   //Mark based on streak and cap
+	    bool marked2 = B_mark[count] != 1;
+	    if (marked1 ^ marked2){
+		if (marked1 != true) return req1;
+		else return req2;
+	    }
+
+	    bool hit1 = this->ctrl->is_row_hit(req1);
+	    bool hit2 = this->ctrl->is_row_hit(req2);
+	    if (hit1 ^ hit2){
+	        if (hit1) return req1;
+		else return req2;
+	    }
+	    
+	    if (req1->arrive <= req2->arrive) return req1;
+	    else return req2;
+            }
     };
 };
 
